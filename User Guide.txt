@@ -1,0 +1,263 @@
+ALERTFORGE - USER GUIDE
+=======================
+
+What this app is for
+---------------------
+AlertForge helps you triage an alert quickly: paste in the raw log, let it
+pull out the fields you care about (user, host, IPs, process, etc.), write
+your analysis, drop in an escalation or false-positive template already
+filled in with those fields, and copy the finished write-up into your
+ticketing system. It also keeps a searchable history of past incidents, a
+place for general notes/KB articles, a log sanitizer for sharing data
+externally, and a few quick text utilities.
+
+The app has 8 tabs across the top. Below is what each one does and how
+they fit together.
+
+
+1. INCIDENT WORKSPACE (your main triage screen)
+------------------------------------------------
+This is where you work a single alert start to finish.
+
+- Paste Logs: paste the raw log (JSON, KQL export, etc.) here and click
+  "Parse Logs." The app recognizes common Rapid7/Sentinel/Defender formats
+  and pulls out fields like user, host, IPs, process, command line, etc.
+  into the "Extracted fields" table below. Click any value in that table
+  to copy just that value to the clipboard. Any row whose value is a
+  plain IP address, a file hash (MD5/SHA1/SHA256), or contains a single
+  http(s) URL shows an underlined "VT" link in the third column - hover
+  it to preview the URL, click it to open a VirusTotal lookup for that
+  value/URL in your browser.
+- Profile dropdown (next to Parse Logs): defaults to "Auto-detect", which
+  is right almost always. If auto-detect ever picks the wrong profile
+  (or doesn't recognize a log yet), pick the correct one by name from
+  this dropdown and click Parse Logs again to force it. Resets to
+  Auto-detect whenever you start a New Incident.
+- Analysis: type your free-form write-up of what you found. A #tag,
+  {field}, or [field] placeholder typed here that isn't resolvable yet is
+  highlighted in yellow too, same as in Ticket output below.
+- Template: pick an escalation or false-positive template from the
+  dropdown and click "Insert Filled Template" - it drops the template
+  into the output box with the extracted fields already filled in.
+- Insert buttons: instead of (or in addition to) a template, you can
+  insert just your Analysis text, a plain summary of the Extracted
+  Fields, or the Raw Log itself into the output box.
+- Ticket output: this is your final write-up, assembled piece by piece
+  from the buttons above. Anything still unresolved (a placeholder like
+  #source_ip that didn't have a value) is highlighted in yellow so you
+  don't miss it - click "Resolve #Tags in Output" to try filling those in
+  again, or "Remove Unresolved Tags" to just delete any that turned out to
+  be unneeded (e.g. a leftover #analysis tag from a template) instead of
+  tracking them down by hand. When it looks right, click "Copy Output to
+  Clipboard" and paste it into your ticketing system.
+- New Incident / Save Incident / Clear All: "Save Incident" stores
+  everything (logs, analysis, output) so you can find it again later in
+  the Incidents tab. "New Incident" starts completely fresh. "Clear All"
+  wipes the boxes but keeps you attached to whatever incident is loaded.
+- Analysis has live spell-check: a misspelled word gets a colored
+  underline shortly after you type it. Right-click an underlined word for
+  suggestions, or "Add to Dictionary" to permanently allowlist it (a
+  product name, internal codename, etc.).
+
+Typical flow: paste log -> Parse Logs -> write Analysis -> Insert Filled
+Template -> Copy Output to Clipboard -> paste into ticket -> Save Incident.
+
+
+2. TEMPLATES
+-------------
+Where escalation and false-positive write-ups are managed.
+
+- Filter by category (All / Escalation / False Positive), pick one from
+  the list, and its body loads into the editor on the right.
+- A template body can use two kinds of placeholder:
+    {field}   shows [field] if that field wasn't found in the log - use
+              this for things that really need a value.
+    #field    an inline tag, e.g. "login from #source_ip" - if the field
+              isn't available it's just left as plain text, so a '#' you
+              type normally is never mistaken for a placeholder.
+- New / Delete / Export / Import let you create templates, remove old
+  ones, or share a set of templates with another analyst as a JSON file.
+- Click "Save Template" after editing.
+
+
+3. QUERY BUILDER
+-----------------
+Build a Rapid7 LEQL or Microsoft Sentinel KQL pivot query prefilled from a
+parsed log - the same idea as Templates, but for a query you'd run in
+Rapid7/Sentinel instead of a ticket write-up.
+
+- Paste Logs / Parse Logs / Profile dropdown work exactly like Incident
+  Workspace - it's the same parser and profile-detection logic, so
+  whatever you'd paste into Workspace works here too.
+- Clicking a row's Value in the Extracted Fields table copies that
+  field's KEY (e.g. "src_ip"), not the value - unlike the same click in
+  Incident Workspace. That's deliberate: here you're usually writing or
+  editing a query template, so what's useful is the exact field name to
+  drop into a #src_ip or {src_ip} placeholder, not the one-off value from
+  whatever log you happened to parse.
+- Pick LEQL or KQL with the radio buttons (parsing a log auto-picks
+  whichever syntax matches it, if it only has queries in one), then
+  choose a query from the dropdown - it lists EVERY query for that
+  syntax, across every log source, not just the one you just parsed.
+  Each entry is prefixed with the log source it's meant for (e.g.
+  "[SigninLogs] Pivot by User") or "[Generic]" for
+  an any-profile query, so you can pivot into a related query on purpose
+  - e.g. parse a sign-in log, then still jump straight to a Device
+  Network Events or USB-copy query for the same investigation.
+- Click "Insert Filled Query" to drop the chosen query into the output box
+  with its {field}/#field placeholders already filled in from the parsed
+  log, same placeholder rules as Templates. This replaces whatever's
+  already in the output box (a query is one self-contained thing to run,
+  not several pieces assembled together like a ticket write-up) - copy
+  the current one first if you want to keep it before picking another.
+  The output box wraps long queries so you can read the whole thing
+  without scrolling sideways. Edit the result by hand, then "Copy" it to
+  your clipboard to paste into Rapid7 or Sentinel.
+- 14 starter queries ship out of the box: pivot-by-user, pivot-by-host/IP,
+  and pivot-by-hash/process for the Rapid7 Ingress Authentication and
+  Endpoint Activity profiles and several Sentinel tables, plus one generic
+  full-text search per syntax.
+- "Manage Query Templates" on the right works exactly like the Templates
+  tab: New / Delete / Export... / Import... Each query is scoped to a
+  specific profile (only shows up when that profile is detected) or left
+  generic ("(Generic - any profile)", always shows up). LEQL queries are
+  fully yours to write and edit - AlertForge doesn't guess at Rapid7 query
+  syntax beyond the starter set, so add the queries you actually use.
+
+
+4. INCIDENTS
+-------------
+Your history of every saved incident.
+
+- Search by keyword, filter by Status, and double-click (or "Load
+  Selected") to bring an incident back into the Workspace tab exactly as
+  you left it.
+- "Rename Selected" gives it a more memorable title (e.g. a ticket
+  number) without touching its contents.
+- "Set Status" + "Apply Status" lets you triage several selected
+  incidents at once (e.g. mark them Closed).
+- "Delete Selected" removes an incident for good.
+
+
+5. NOTES
+---------
+A general-purpose place for anything that isn't tied to one specific
+incident - KB articles, saved hunting queries, reference info, this guide,
+etc.
+
+- Search checks both title and body, so searching something like a
+  Windows event code finds any note that mentions it, not just ones
+  titled that way. Open a matching note (or hit Search again while one's
+  already open) and every occurrence of your search term is highlighted
+  in orange right in the note, with the view jumped straight to the
+  first hit - no need to re-read the whole note to find it.
+- New Note / Delete / Export / Import work like the other tabs.
+- The small toolbar above the editor (B / I / U / S / Heading / Clear
+  Formatting) lets you bold, italicize, underline, strike through, or
+  add a heading to selected text.
+- Notes autosave when you switch to a different note or leave the tab, so
+  you don't need to remember to click Save Note constantly - though the
+  button is there too.
+
+
+6. SANITIZE LOGS
+-----------------
+Strips sensitive values out of a log before you paste it somewhere
+outside the team (a vendor ticket, a chat, etc.).
+
+- Check which categories to detect (IPs, hostnames, accounts, etc.),
+  paste the log, and click "Sanitize." Every matched value is replaced
+  with the plain word REDACTED, and exactly what changed is highlighted
+  in green in the output so you can review it before sharing.
+- "Custom Find/Replace" at the bottom lets you save your own keyword ->
+  replacement pairs (company names, internal codenames, etc.) that the
+  built-in categories wouldn't know to catch. These are saved and reused
+  every time, and always applied before the category-based scanning.
+- This is heuristic/best-effort - always give the output a quick look
+  before sending it anywhere.
+
+
+7. TEXT TOOLS
+--------------
+A scratch pad of quick text operations, unrelated to structured log
+parsing - handy for digging into a suspicious blob of text.
+
+- Check one or more operations (Base64 Decode, From Hex Code, URL Decode,
+  Extract Email Addresses, Extract IP Addresses, Remove Extra Whitespace,
+  Sort Alphabetically, Remove Duplicates, Defang URLs/IPs), paste your
+  text, and click "Apply."
+- Checked operations always run in the same sensible order - decode
+  first, then extract, then clean up, then defang last - no matter what
+  order you clicked them in, so the result is predictable.
+- Checking both "Extract Email Addresses" and "Extract IP Addresses" at
+  once pulls both kinds of value out of the same text and combines them.
+
+
+8. FIELD MAPPINGS (ADVANCED)
+------------------------------
+Controls how the parser recognizes a log type and pulls fields out of it.
+Most analysts won't need this day-to-day, but it's here for tuning the
+parser or teaching it a brand-new alert/log type.
+
+- The left-hand tree shows every existing profile and the fields it
+  extracts. Select a field to load it into the edit form, or select a
+  profile to see its detection rule.
+- "Rename Selected Profile": select a profile (not a field) and click
+  this to give it a clearer display name. This only changes the name
+  shown everywhere - the profile keeps working exactly the same, and
+  anything already tied to it (saved incidents, Query Builder's query
+  templates, etc.) stays tied to it after the rename.
+- "Move Field Up" / "Move Field Down": select a field and click these to
+  reorder it within its profile. A profile's field order is what decides
+  the row order in the Extracted Fields table after parsing - a newly
+  added field always starts at the bottom, so use these to move it up
+  (e.g. put Timestamp near the top, or group related fields together).
+- "Add / Update a Field" maps a JSON key (or nested path) to a field name
+  for a chosen profile - once added, it's usable as {field} or #field in
+  templates right away.
+- "Create a New Profile" starts a brand-new log type, identified by
+  whatever unique JSON key(s) you give it.
+- "Test a Sample Log" lets you paste a sample and preview what would be
+  detected/extracted, without touching your real Workspace tab.
+- "Advanced: Raw JSON" shows the underlying field_mappings.json file
+  directly, for bulk edits.
+- Export/Import Profile(s) lets you share your field mappings with
+  another analyst.
+
+
+OTHER THINGS TO KNOW
+----------------------
+- Right-click any text box or field in the app for Cut/Copy/Paste/Select
+  All (and Undo/Redo in the larger text boxes).
+- Dark Mode: toggle top-right. On by default.
+- Font size: use the A- / A+ buttons (top-right) or Ctrl+- / Ctrl+= /
+  Ctrl+0, from anywhere in the app.
+- File menu: Backup Database... and Restore Database... let you save or
+  restore a full copy of your templates/incidents/notes (a plain .db
+  file) - handy before a big change, or to move your data to another
+  machine.
+- Everything you save (templates, incidents, notes, sanitize keywords,
+  field mappings) lives in files right next to the app, so backing up
+  whichever folder the app is running from backs up everything.
+
+
+TYPICAL END-TO-END WORKFLOW
+------------------------------
+1. An alert comes in. Paste the raw log into Incident Workspace and click
+   Parse Logs.
+2. Review the Extracted Fields table; write your findings in Analysis.
+3. Pick the matching Escalation or False Positive template and click
+   Insert Filled Template (or build the write-up manually with the
+   Insert buttons).
+4. Check the output box for any yellow-highlighted unresolved tags and
+   fill those in, or click Resolve #Tags in Output.
+5. Copy Output to Clipboard and paste into your ticketing system.
+6. Click Save Incident so it's searchable later in the Incidents tab.
+7. If you need to share the raw log outside the team, run it through
+   Sanitize Logs first.
+8. Use Text Tools any time you need to quickly decode/extract/clean up a
+   piece of text that's part of the investigation.
+9. Keep reusable reference material (KB articles, saved queries, guides
+   like this one) in the Notes tab.
+10. Need to pivot further in Rapid7 or Sentinel? Use the Query Builder tab
+    to build a prefilled LEQL/KQL query from the same parsed log.
